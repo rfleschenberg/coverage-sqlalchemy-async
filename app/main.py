@@ -1,7 +1,6 @@
-import asyncio
-
+from fastapi import FastAPI
 from sqlalchemy import Column, Integer, String
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -29,13 +28,30 @@ async def create_user():
     user = User(email="test@example.org")
     session.add(user)
     await session.commit()
-    await session.refresh(user)
 
-    query = (
+    query = select(User).where(User.id == user.id)
+    result = await session.execute(query)
+    user_from_db = result.scalars().one()
+
+    update_query = (
         update(User)
-        .where(User.id == user.id)
+        .where(User.id == user_from_db.id)
         .values({"email": "test2@example.org"})
         .execution_options(synchronize_session="fetch")
     )
-    await session.execute(query)
-    return user
+    await session.execute(update_query)
+
+    query = select(User).where(User.id == user.id)
+    result = await session.execute(query)
+    user_from_db = result.scalars().one()
+
+    return user_from_db
+
+
+app = FastAPI()
+
+
+@app.get("/")
+async def root():
+    user = await create_user()
+    return {"id": user.id}
